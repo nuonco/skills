@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "nuon-actions": {
+      "source": "nuonco/skills",
+      "sourceType": "github",
+      "computedHash": "d0758b26d322866bb4ad3127112d58a49fa189b91422ddda7ae305b954770c57"
+    },
+    "nuon-app-config": {
+      "source": "nuonco/skills",
+      "sourceType": "github",
+      "computedHash": "e9fa325f093cf03b056e3c62ac29a68c9e508e5aab7c19a7c83eaeaf8663332b"
+    },
+    "nuon-creator": {
+      "source": "nuonco/skills",
+      "sourceType": "github",
+      "computedHash": "633cbd654942fc14d587051e46e9581deed040c3d759736118754594f9304f5e"
+    },
+    "nuon-policy": {
+      "source": "nuonco/skills",
+      "sourceType": "github",
+      "computedHash": "fa3160f795e673dc9e023d8ce19c7967ac238671f2c5fea24797f75504c33e7e"
+    }
+  }
+}
