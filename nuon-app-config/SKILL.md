@@ -58,10 +58,16 @@ Before generating any config files, gather the following through a structured in
 9. **Do you need day-2 operation scripts?**
    - Health checks, database migrations, init scripts, diagnostics, cleanup
 
-### Step 7: Helm Values & Terraform Variables
+### Step 7: Install Config (AWS only)
 
-10. **Existing values files or tfvars?** Reference with relative paths.
-11. **Template variables needed?** See `references/template-variables.md`.
+10. **Do you need an install config (`install.toml`)?**
+    - Sets install name, approval option (`auto` or `prompt`), AWS region, and default input values
+    - Only supported for AWS installs — not applicable for Azure
+
+### Step 8: Helm Values & Terraform Variables
+
+11. **Existing values files or tfvars?** Reference with relative paths.
+12. **Template variables needed?** See `references/template-variables.md`.
 
 ---
 
@@ -73,6 +79,7 @@ Before generating any config files, gather the following through a structured in
 ├── runner.toml        # required
 ├── inputs.toml
 ├── sandbox.toml
+├── policies.toml      # optional — OPA policy registration
 ├── permissions/       # required
 │   ├── provision.toml
 │   ├── deprovision.toml
@@ -80,8 +87,11 @@ Before generating any config files, gather the following through a structured in
 ├── components/
 │   ├── <N>-<component-name>.toml
 │   └── ...
-└── actions/           # optional
-    └── <action-name>.toml
+├── policies/          # optional — Rego policy files
+│   └── <policy-name>.rego
+├── actions/           # optional
+│   └── <action-name>.toml
+└── install.toml       # optional — AWS only; defines install defaults and approval flow
 ```
 
 Number prefixes (`1-postgres.toml`) are visual only. Deployment order is determined by the `dependencies` array.

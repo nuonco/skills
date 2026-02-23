@@ -356,8 +356,19 @@ kubectl get pods -n <namespace> --no-headers
 ```
 
 **Trigger types:**
-- `type = "manual"` — on-demand (day-2 ops)
-- `type = "pre-deploy-component"` + `component_name = "<name>"` — runs before that component deploys (install-time)
+
+| Type | When it runs |
+|---|---|
+| `manual` | On-demand via dashboard or CLI |
+| `post-provision` | After sandbox is provisioned |
+| `pre-provision` | Before sandbox provisioning |
+| `post-deploy-all-components` | After all components deploy |
+| `pre-deploy-all-components` | Before all components deploy |
+| `post-deprovision` | After teardown |
+| `pre-deprovision` | Before teardown |
+| `post-update-inputs` | After inputs are updated |
+| `post-reprovision` | After sandbox reprovision |
+| `pre-deploy-component` | Before a specific component deploys — add `component_name = "<name>"` |
 
 Actions can have multiple `[[triggers]]` entries. Each action must have at least one `[[triggers]]` and one `[[steps]]` entry, plus a `timeout`.
 

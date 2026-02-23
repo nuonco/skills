@@ -51,11 +51,11 @@ Builds day-2 operation scripts for an existing Nuon app. Actions are shell scrip
 
 ### `nuon-policy` — Policy Creator
 
-Defines deployment governance and approval workflows. Controls how installs are created, who can approve them, and what constraints apply to customer inputs.
+Defines compliance and security policies using OPA Rego. Validates container images at build time and Terraform/Helm components at deploy time — blocking or warning on violations.
 
-**Covers:** approval gates (`auto` vs `prompt`), multi-environment install configs, input constraints
+**Covers:** image signing requirements, Terraform resource encryption, Helm resource limits, component-scoped or app-wide policy enforcement
 
-> "add approval to my Nuon installs" / "set up staging and production configs" / deployment governance
+> "require signed images" / "enforce encryption on my Terraform resources" / "add resource limits to my Helm chart"
 
 ---
 

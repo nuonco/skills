@@ -27,7 +27,7 @@ Build a complete Nuon app configuration from scratch — sandboxes, components (
 Build day-2 operation scripts for your Nuon app — health checks, database migrations, diagnostics, secret creation, storage class setup. Start here if you already have an app config and need operational scripts.
 
 **3. Policy Creator** (`nuon-policy`)
-Define deployment and approval policies — approval gates, automatic vs. manual promotion, install constraints. Start here if you need governance and guardrails around how your app gets deployed.
+Define compliance and security policies using OPA Rego — validate container images at build time, enforce encryption or resource limits on Terraform/Helm components at deploy time. Start here if you need security guardrails around what gets built or deployed.
 
 ## Routing Logic
 

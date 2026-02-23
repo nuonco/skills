@@ -56,11 +56,19 @@ sensitive    = false
 display_name = "App Release"
 type         = "string"
 group        = "mattermost"
+
+[[input]]
+name         = "instance_type"
+description  = "AWS EC2 instance type for EKS nodes"
+default      = "t3a.medium"
+sensitive    = false
+display_name = "Node Instance Size"
+type         = "string"
+group        = "compute"
 ```
 
 **sandbox.toml:**
 ```toml
-# sandbox
 terraform_version = "1.11.3"
 
 [public_repo]
@@ -69,10 +77,44 @@ repo      = "nuonco/aws-eks-sandbox"
 branch    = "main"
 
 [vars]
-cluster_name         = "n-{{ .nuon.install.id }}"
-enable_nuon_dns      = "true"
-public_root_domain   = "{{ .nuon.inputs.inputs.root_domain }}"
-internal_root_domain = "internal.{{ .nuon.inputs.inputs.root_domain }}"
+cluster_name          = "n-{{ .nuon.install.id }}"
+enable_nuon_dns       = "true"
+public_root_domain    = "{{ .nuon.inputs.inputs.root_domain }}"
+internal_root_domain  = "internal.{{ .nuon.inputs.inputs.root_domain }}"
+default_instance_type = "{{ .nuon.inputs.inputs.instance_type }}"
+```
+
+**permissions/provision.toml:**
+```toml
+type         = "provision"
+name         = "{{ .nuon.install.id }}-provision"
+description  = "Provision the sandbox and components"
+display_name = "provision role"
+
+[[policies]]
+managed_policy_name = "AdministratorAccess"
+```
+
+**permissions/deprovision.toml:**
+```toml
+type         = "deprovision"
+name         = "{{ .nuon.install.id }}-deprovision"
+description  = "Deprovision sandbox and components"
+display_name = "deprovision role"
+
+[[policies]]
+managed_policy_name = "AdministratorAccess"
+```
+
+**permissions/maintenance.toml:**
+```toml
+type         = "maintenance"
+name         = "{{ .nuon.install.id }}-maintenance"
+description  = "Operate and maintain the app components"
+display_name = "maintenance role"
+
+[[policies]]
+managed_policy_name = "AdministratorAccess"
 ```
 
 **components/1-postgres.toml:**
@@ -131,7 +173,7 @@ branch    = "main"
 # kubernetes-manifest
 name         = "mattermost_manifest_installation"
 type         = "kubernetes_manifest"
-dependencies = ["postgres_db", "mattermost_manifest_db_secret", "s3_buckets"]
+dependencies = ["postgres_db", "mattermost_manifest_db_secret"]
 namespace    = "mattermost"
 
 manifest = """
@@ -193,9 +235,14 @@ contents = "./values/alb.yaml"
 # action
 name        = "alb_health_check"
 description = "Check ALB and pod health for Mattermost"
-run_mode    = "day2"
+timeout     = "5m"
 
-script = """
+[[triggers]]
+type = "manual"
+
+[[steps]]
+name            = "check_health"
+inline_contents = """
 #!/bin/sh
 set -e
 echo "=== Ingress Status ==="
