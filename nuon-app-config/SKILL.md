@@ -41,9 +41,10 @@ Before generating any config files, gather the following through a structured in
    - AWS EKS → `nuonco/aws-eks-sandbox`
    - AWS EKS + Karpenter → `nuonco/aws-eks-karpenter-sandbox`
    - AWS Minimal (no K8s) → `nuonco/aws-min-sandbox`
-   - Azure AKS → `nuonco/terraform-azure-aks-sandbox`
+   - Azure AKS → `nuonco/azure-aks-sandbox` *(also requires a `runner.toml` with `runner_type = "azure"`)*
+   - GCP → **not yet supported**
 
-7. **Do you need Nuon DNS?** (enables `*.nuon.run` public URLs)
+7. **Do you need Nuon DNS?** (enables `*.nuon.run` public URLs; AWS only — not available on Azure)
 
 ### Step 5: Inputs
 

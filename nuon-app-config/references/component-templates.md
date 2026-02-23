@@ -159,12 +159,47 @@ internal_root_domain = "internal.{{ .nuon.inputs.inputs.root_domain }}"
 
 Available managed sandboxes:
 
-| Sandbox | Repo |
-|---|---|
-| AWS EKS | `nuonco/aws-eks-sandbox` |
-| AWS EKS + Karpenter | `nuonco/aws-eks-karpenter-sandbox` |
-| AWS Minimal (no K8s) | `nuonco/aws-min-sandbox` |
-| Azure AKS | `nuonco/terraform-azure-aks-sandbox` |
+| Sandbox | Repo | Cloud |
+|---|---|---|
+| AWS EKS | `nuonco/aws-eks-sandbox` | AWS |
+| AWS EKS + Karpenter | `nuonco/aws-eks-karpenter-sandbox` | AWS |
+| AWS Minimal (no K8s) | `nuonco/aws-min-sandbox` | AWS |
+| Azure AKS | `nuonco/azure-aks-sandbox` | Azure |
+
+> **GCP**: not yet supported. Contact Nuon if interested.
+
+### Azure Sandbox
+
+```toml
+# sandbox
+terraform_version = "1.11.3"
+
+[public_repo]
+directory = "."
+repo      = "nuonco/azure-aks-sandbox"
+branch    = "main"
+
+[vars]
+public_root_domain   = "{{ .nuon.inputs.inputs.root_domain }}"
+internal_root_domain = "internal.{{ .nuon.inputs.inputs.root_domain }}"
+location             = "{{ .nuon.cloud_account.azure.location }}"
+vnet_name            = "{{ .nuon.install_stack.outputs.network_name }}"
+resource_group_name  = "{{ .nuon.install_stack.outputs.resource_group_name }}"
+private_subnet_names = "{{ .nuon.install_stack.outputs.private_subnet_names }}"
+public_subnet_names  = "{{ .nuon.install_stack.outputs.public_subnet_names }}"
+```
+
+### Azure Runner
+
+Azure apps require a `runner.toml` alongside `sandbox.toml`:
+
+```toml
+# runner
+runner_type = "azure"
+helm_driver = "configmap"
+```
+
+---
 
 ## Inputs
 
@@ -207,6 +242,10 @@ kubectl get pods -n <namespace> --no-headers
 `run_mode`: `"install"` (runs during provisioning) or `"day2"` (on-demand)
 
 ## Install Config
+
+> **Note**: Install config files (`install.toml`) are only supported for **AWS** installs. Azure installs are provisioned via the Nuon dashboard + Azure CLI — there is no `install.toml` for Azure.
+
+### AWS Install Config
 
 ```toml
 # install
