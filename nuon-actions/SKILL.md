@@ -13,18 +13,17 @@ Generate production-ready Nuon action scripts. Actions are shell scripts wrapped
 ## Key Concepts
 
 - Actions live in the `actions/` directory of your app config
-- Each action has `triggers` (when it runs) and `steps` (what it does)
-- `type = "manual"` trigger — on-demand via Nuon dashboard or CLI (day-2 ops)
-- `type = "pre-deploy-component"` trigger — runs automatically before a component deploys (install-time)
-- `timeout` is required on every action
-- Actions run in the Nuon runner, not as pods in the cluster
+- When an action runs is controlled by its `[[triggers]]` — not a `run_mode` field (`run_mode` does not exist)
+- Use `type = "manual"` for on-demand day-2 operations
+- Use `type = "post-provision"` to run automatically after the sandbox is provisioned
+- Actions have access to `kubectl`, standard shell tools, and Nuon template variables
 
 ## Discovery Process
 
 Ask these before generating any action:
 
 1. **What does this action do?**
-2. **When should it run?** On-demand (`manual`) or automatically before a component deploys (`pre-deploy-component`)?
+2. **When should it run?** On-demand (`manual`), after provisioning (`post-provision`), after deploy (`post-deploy-all-components`), etc.
 3. **What namespace(s) does it target?**
 4. **Does it need customer inputs or component outputs?**
 
@@ -32,12 +31,16 @@ Ask these before generating any action:
 
 ## Action Template
 
-Every action file must start with `# action`:
+Every action file must start with `# action`. Required fields: `name`, `timeout`, `triggers`, `steps`.
+
+- `[[triggers]]` is a TOML array-of-tables — **not** `triggers = []`
+- Inline scripts use `inline_contents`, not `script`
 
 ```toml
 # action
-name    = "<action_name>"
-timeout = "30s"
+name        = "<action_name>"
+description = "What this action does"
+timeout     = "5m"
 
 [[triggers]]
 type = "manual"
@@ -45,97 +48,46 @@ type = "manual"
 [[steps]]
 name            = "<step_name>"
 inline_contents = """
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
 # your script here
 """
 ```
 
----
-
 ## Trigger Types
 
-**Manual (on-demand, day-2):**
-```toml
-[[triggers]]
-type = "manual"
-```
+| Type | When it runs |
+|---|---|
+| `manual` | On-demand via dashboard or CLI |
+| `post-provision` | After sandbox is provisioned |
+| `pre-provision` | Before sandbox provisioning |
+| `post-deploy-all-components` | After all components deploy |
+| `pre-deploy-all-components` | Before all components deploy |
+| `post-deprovision` | After teardown |
+| `pre-deprovision` | Before teardown |
+| `post-update-inputs` | After inputs are updated |
+| `post-reprovision` | After sandbox reprovision |
 
-**Pre-deploy-component (runs before a component deploys):**
-```toml
-[[triggers]]
-type           = "pre-deploy-component"
-component_name = "<component_name>"
-```
-
-**Post-deploy-component (runs after a component deploys — common for secrets/credentials):**
-```toml
-[[triggers]]
-type           = "post-deploy-component"
-component_name = "<component_name>"
-```
-
-An action can have multiple triggers:
-```toml
-[[triggers]]
-type           = "post-deploy-component"
-component_name = "rds_cluster"
-
-[[triggers]]
-type = "manual"
-```
-
-Use `post-deploy-component` when the action depends on outputs from a completed component (e.g., copying an RDS secret into Kubernetes after the database is provisioned).
-
----
-
-## Step Types
-
-**Inline script:**
-```toml
-[[steps]]
-name            = "<step_name>"
-inline_contents = """
-#!/usr/bin/env sh
-set -e
-kubectl get pods -n <namespace>
-"""
-```
-
-**Script from a repo:**
-```toml
-[[steps]]
-name    = "<step_name>"
-command = "./script.sh"
-
-[steps.public_repo]
-repo      = "<org>/<repo>"
-directory = "<path/to/scripts>"
-branch    = "main"
-
-[steps.env_vars]
-MY_VAR = "{{ .nuon.install.id }}"
-```
-
-Use `[steps.connected_repo]` instead of `[steps.public_repo]` for private repos.
+Multiple triggers are supported — just add more `[[triggers]]` blocks.
 
 ---
 
 ## Common Patterns
 
-**Health check (manual/day-2):**
+**Health check (manual day-2):**
 ```toml
 # action
-name    = "health_check"
-timeout = "30s"
+name        = "health_check"
+description = "Check pod and service health"
+timeout     = "5m"
 
 [[triggers]]
 type = "manual"
 
 [[steps]]
-name            = "check-pods-and-services"
+name            = "check_health"
 inline_contents = """
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
 echo "=== Pods ===" && kubectl get pods -n <namespace>
 echo "=== Services ===" && kubectl get svc -n <namespace>
@@ -143,139 +95,70 @@ echo "=== Ingress ===" && kubectl get ingress -n <namespace>
 """
 ```
 
-**Set default storage class (pre-deploy, install-time):**
+**Database migration (runs after every deploy):**
 ```toml
 # action
-name    = "default_storage_class"
-timeout = "1m"
+name        = "run_migrations"
+description = "Run database migrations"
+timeout     = "10m"
 
 [[triggers]]
-type           = "pre-deploy-component"
-component_name = "postgres_db"
+type = "post-deploy-all-components"
 
 [[triggers]]
 type = "manual"
 
 [[steps]]
-name            = "make_gp2_default_storage_class"
+name            = "migrate"
 inline_contents = """
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
-kubectl patch storageclass gp2 \
-  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+kubectl exec -n <namespace> deploy/<deployment> -- /app/migrate up
 """
 ```
 
-**Copy secret after RDS/DB provisioned (post-deploy, install-time):**
+**Idempotent secret creation (post-provision):**
 ```toml
 # action
-name    = "copy_db_secret"
-timeout = "1m"
+name        = "create_secret"
+description = "Create application secret"
+timeout     = "5m"
 
 [[triggers]]
-type           = "post-deploy-component"
-component_name = "rds_cluster"
+type = "post-provision"
 
 [[triggers]]
 type = "manual"
 
 [[steps]]
-name    = "import-rds-secret"
-command = "./import.sh"
-
-[steps.public_repo]
-repo      = "<org>/<repo>"
-directory = "<path/to/scripts>"
-branch    = "main"
-
-[steps.env_vars]
-SECRET_ARN       = "{{ .nuon.components.rds_cluster.outputs.db_instance_master_user_secret_arn }}"
-REGION           = "{{ .nuon.install_stack.outputs.region }}"
-TARGET_NAME      = "db-secret"
-TARGET_NAMESPACE = "<namespace>"
-DB_ADDRESS       = "{{ .nuon.components.rds_cluster.outputs.address }}"
-DB_PORT          = "{{ .nuon.components.rds_cluster.outputs.db_instance_port }}"
-DB_NAME          = "{{ .nuon.components.rds_cluster.outputs.db_instance_name }}"
-```
-
-**Multi-step action:**
-```toml
-# action
-name    = "copy_db_secrets"
-timeout = "2m"
-
-[[triggers]]
-type           = "post-deploy-component"
-component_name = "rds_cluster"
-
-[[triggers]]
-type = "manual"
-
-[[steps]]
-name    = "copy-secret-to-app-namespace"
-command = "./import.sh"
-
-[steps.public_repo]
-repo      = "<org>/<repo>"
-directory = "<path/to/scripts>"
-branch    = "main"
-
-[steps.env_vars]
-SECRET_ARN       = "{{ .nuon.components.rds_cluster.outputs.db_instance_master_user_secret_arn }}"
-TARGET_NAMESPACE = "app"
-
-[[steps]]
-name    = "copy-secret-to-monitoring-namespace"
-command = "./import.sh"
-
-[steps.public_repo]
-repo      = "<org>/<repo>"
-directory = "<path/to/scripts>"
-branch    = "main"
-
-[steps.env_vars]
-SECRET_ARN       = "{{ .nuon.components.rds_cluster.outputs.db_instance_master_user_secret_arn }}"
-TARGET_NAMESPACE = "monitoring"
-```
-
-**Idempotent secret creation (pre-deploy, install-time):**
-```toml
-# action
-name    = "create_secret"
-timeout = "1m"
-
-[[triggers]]
-type           = "pre-deploy-component"
-component_name = "<target_component>"
-
-[[steps]]
-name            = "create-app-secret"
+name            = "create_secret"
 inline_contents = """
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
 kubectl create secret generic <secret-name> \
-  --from-literal=KEY="{{ .nuon.install.inputs.<input_name> }}" \
+  --from-literal=KEY="{{ .nuon.inputs.inputs.<input_name> }}" \
   -n <namespace> \
   --dry-run=client -o yaml | kubectl apply -f -
 """
 ```
 
-**Database migration (pre-deploy, install-time):**
+**Set default storage class (post-provision):**
 ```toml
 # action
-name    = "run_migrations"
-timeout = "5m"
+name        = "set_default_storage_class"
+description = "Configure default storage class for persistent volumes"
+timeout     = "5m"
 
 [[triggers]]
-type           = "pre-deploy-component"
-component_name = "<app_component>"
+type = "post-provision"
 
 [[steps]]
-name            = "migrate-db"
+name            = "patch_storage_class"
 inline_contents = """
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
-kubectl exec -n <namespace> deploy/<deployment> -- /app/migrate up
+kubectl patch storageclass gp2 \
+  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 """
 ```
 
@@ -286,8 +169,8 @@ kubectl exec -n <namespace> deploy/<deployment> -- /app/migrate up
 | Variable | Description |
 |---|---|
 | `{{ .nuon.install.id }}` | Unique install ID |
-| `{{ .nuon.install_stack.outputs.region }}` | AWS region |
-| `{{ .nuon.install.inputs.<name> }}` | Customer input value (use in components/actions) |
+| `{{ .nuon.install.sandbox.account.region }}` | Cloud region |
+| `{{ .nuon.inputs.inputs.<name> }}` | Customer input value |
 | `{{ .nuon.components.<name>.outputs.<key> }}` | Cross-component output |
 
 ---
@@ -295,21 +178,20 @@ kubectl exec -n <namespace> deploy/<deployment> -- /app/migrate up
 ## Rules
 
 - Always `set -e` — fail fast
-- `timeout` is required — use `"30s"`, `"1m"`, `"5m"` etc.
-- Install-time actions (pre-deploy) block progression — keep them fast and idempotent
+- Install-time actions block provisioning — keep them fast and idempotent
+- Actions run in the Nuon runner, not as pods in the cluster
 - Use `--dry-run=client -o yaml | kubectl apply -f -` for idempotent resource creation
 - File naming: `<action-name>.toml` (kebab-case files, snake_case `name` field)
-- Use `inline_contents` for simple scripts; use `command` + repo source for complex ones
 
 ## Validation Checklist
 
 - [ ] File starts with `# action`
 - [ ] `name` is snake_case and unique across the app
-- [ ] `timeout` is present (e.g., `"30s"`, `"1m"`)
-- [ ] `[[triggers]]` array is present with at least one entry
-- [ ] `[[steps]]` array is present with at least one entry
-- [ ] Each step has either `inline_contents` or `command` + repo source
-- [ ] Install-time actions (pre-deploy) are idempotent
+- [ ] `timeout` is set (e.g. `"5m"`, max `"30m"`)
+- [ ] At least one `[[triggers]]` block with a valid `type` value
+- [ ] At least one `[[steps]]` block with a `name` field
+- [ ] Step script uses `inline_contents` key — **not** `script`
+- [ ] Script starts with `#!/bin/sh` and `set -e`
 
 ---
 
