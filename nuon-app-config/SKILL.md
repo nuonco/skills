@@ -77,10 +77,11 @@ Before generating any config files, gather the following through a structured in
 <app-name>/
 ├── metadata.toml      # required
 ├── runner.toml        # required
+├── stack.toml         # required for AWS — without it, "Generate install stack" fails
 ├── inputs.toml
 ├── sandbox.toml
 ├── policies.toml      # optional — OPA policy registration
-├── permissions/       # required
+├── permissions/       # required — must be a DIRECTORY, not a single file
 │   ├── provision.toml
 │   ├── deprovision.toml
 │   └── maintenance.toml
@@ -113,7 +114,9 @@ These files do **not** use type comments: `metadata.toml`, `sandbox.toml`, `perm
 
 - [ ] `metadata.toml` exists at the app root with a `version` field
 - [ ] `runner.toml` exists at the app root with the correct `runner_type` for the target cloud
-- [ ] `permissions/` directory exists with `provision.toml`, `deprovision.toml`, and `maintenance.toml`
+- [ ] `stack.toml` exists at the app root for **AWS** installs — missing this causes "Generate install stack" to fail silently
+- [ ] `sandbox.toml` includes `cluster_version` in `[vars]` — omitting it causes cluster provisioning failures
+- [ ] `permissions/` is a **directory** (not a single file) containing `provision.toml`, `deprovision.toml`, and `maintenance.toml`
 - [ ] Every action has `timeout`, at least one `[[triggers]]`, and at least one `[[steps]]`
 - [ ] Every `[[input]]` in `inputs.toml` has a `group` field matching a declared `[[group]]`
 - [ ] Files that require type comments have them (`# runner`, `# inputs`, `# helm`, `# terraform`, `# kubernetes-manifest`, `# action`, etc.) — `metadata.toml`, `sandbox.toml`, `permissions/*.toml` do NOT use type comments
@@ -129,6 +132,13 @@ These files do **not** use type comments: `metadata.toml`, `sandbox.toml`, `perm
 
 ## Common Gotchas
 
+- **`stack.toml` missing for AWS** — required for AWS installs; without it, "Generate install stack" fails silently with no clear error. See `references/component-templates.md` for the template.
+- **`cluster_version` missing from sandbox** — easy to forget; always include it in `[vars]` in `sandbox.toml`. Omitting it causes cluster provisioning failures.
+- **Generic errors mean structural mistakes** — Nuon error messages are often vague. When something fails, check the config structure first: missing files, wrong key names, wrong data type, incorrect nesting. The most common root cause is a subtle structural mistake. Always check runner logs, not just the status.
+- **Directories vs. files** — Nuon sometimes expects a directory where you might assume a single file. `permissions/` must be a directory with three separate `.toml` files, not a single file.
+- **IAM ≠ Kubernetes RBAC** — these are completely separate auth systems. `AdministratorAccess` on the IAM role lets it call AWS APIs (EKS, S3, EC2, etc.) but does **not** grant access inside the Kubernetes cluster. You must explicitly add the maintenance role to EKS RBAC. When something is "forbidden," identify which system is rejecting it — they fail in completely different ways.
+- **The bootstrap problem (critical)** — Nuon actions run using the maintenance role inside the EKS cluster. If the maintenance role doesn't have Kubernetes RBAC access, no actions can run — including any action meant to grant that access. Never use a `post-provision` action to grant the maintenance role cluster access; it cannot work. **Anything the runner needs to function must be set up during provisioning via Terraform, not via actions.** The right pattern: a `components/0-eks-access.toml` Terraform component that creates the EKS access entry and runs before all other components. Alternatively, check if the sandbox module accepts a `maintenance_role_arn` var — if so, pass it there and get this for free.
+- **`post-provision` won't fire for existing installs** — if an install was provisioned before a `post-provision` action was added to the config, that trigger will never fire for that install. Don't rely on `post-provision` for installs that already exist.
 - **Input groups are required** — every `[[input]]` must have a `group` field referencing a declared `[[group]]`. Missing or empty group → `invalid group ""` error on sync
 - **`readme` file reference** — if `metadata.toml` uses `readme = "./README.md"` (file path), the file must exist or `nuon apps sync` will fail with `unable to fetch field value`. Either omit `readme`, use an inline markdown string, or create the referenced file
 - **Component name in cross-references** — use the exact `name` field value, not the filename
@@ -145,7 +155,7 @@ These files do **not** use type comments: `metadata.toml`, `sandbox.toml`, `perm
 - Template variable reference → `references/template-variables.md`
 - Complete Mattermost example → `references/example-mattermost.md`
 - [Nuon config docs](https://docs.nuon.co/configuration-files)
-- [Example app configs](https://github.com/nuonco/example-app-configs)
+- [Example app configs](https://github.com/nuonco/example-app-configs) — **ground truth for correct config structure**; when something fails or you're unsure about a key name, format, or file, check here first
 
 ## CLI Workflow
 

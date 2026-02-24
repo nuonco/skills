@@ -13,10 +13,13 @@ Generate production-ready Nuon action scripts. Actions are shell scripts wrapped
 ## Key Concepts
 
 - Actions live in the `actions/` directory of your app config
-- When an action runs is controlled by its `[[triggers]]` — not a `run_mode` field (`run_mode` does not exist)
+- When an action runs is controlled by its `[[triggers]]`
+- `run_mode = "install"` makes the action run in the install's cluster context using the maintenance role
 - Use `type = "manual"` for on-demand day-2 operations
 - Use `type = "post-provision"` to run automatically after the sandbox is provisioned
 - Actions have access to `kubectl`, standard shell tools, and Nuon template variables
+- **Actions cannot bootstrap their own access** — actions run using the maintenance role; if that role lacks Kubernetes RBAC access, no action can run. Use Terraform to set up access during provisioning, not a post-provision action.
+- **`post-provision` won't fire for existing installs** — installs that were provisioned before the action was added will never trigger `post-provision`. Don't rely on it for existing installs.
 
 ## Discovery Process
 

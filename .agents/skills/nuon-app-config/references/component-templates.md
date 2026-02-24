@@ -48,6 +48,26 @@ Use `runner_type = "aws"` for all AWS sandboxes. Use `runner_type = "azure"` for
 
 ---
 
+## Stack Config (AWS only)
+
+Required for AWS installs. Without `stack.toml`, the "Generate install stack" step fails silently. Not used for Azure.
+
+The stack points to CloudFormation templates that provision the runner VPC and ASG. **Use the standard Nuon artifact URLs — do not invent your own.** Copy the template URLs from the [nuonco/example-app-configs](https://github.com/nuonco/example-app-configs) repo.
+
+```toml
+# stack
+[[stacks]]
+name        = "runner"
+description = "Nuon runner VPC and ASG"
+
+[aws_cloudformation]
+template_url = "<standard-nuon-artifact-url>"
+```
+
+> Get the correct `template_url` values from the `stack.toml` in the `nuonco/example-app-configs` repo. The URLs point to Nuon-hosted CloudFormation templates — do not invent or modify them.
+
+---
+
 ## Helm Chart
 
 ```toml
@@ -119,6 +139,30 @@ vpc_id     = "{{ .nuon.install_stack.outputs.vpc_id }}"
 [[var_file]]
 contents = "./terraform/<name>.tfvars"
 ```
+
+### EKS Access Entry Pattern (run first, no components depend on it)
+
+Use this when the sandbox doesn't accept a `maintenance_role_arn` var. Creates the EKS access entry via AWS API so the maintenance role has cluster-admin before any other component runs. This Terraform only needs IAM permissions — it does not need existing Kubernetes access.
+
+```toml
+# terraform
+name              = "eks_access"
+type              = "terraform_module"
+terraform_version = "1.11.3"
+# No dependencies — this must run before everything else
+
+[public_repo]
+directory = "<path/to/eks-access-module>"
+repo      = "<org>/<repo>"
+branch    = "main"
+
+[vars]
+cluster_name         = "n-{{ .nuon.install.id }}"
+maintenance_role_arn = "{{ .nuon.install.iam_roles.maintenance.arn }}"
+region               = "{{ .nuon.install_stack.outputs.region }}"
+```
+
+All other components should list `"eks_access"` in their `dependencies` array.
 
 ## Kubernetes Manifest
 
@@ -211,10 +255,14 @@ branch    = "main"
 
 [vars]
 cluster_name          = "n-{{ .nuon.install.id }}"
+cluster_version       = "1.31"
 enable_nuon_dns       = "true"
 public_root_domain    = "{{ .nuon.install.id }}.nuon.run"
 internal_root_domain  = "internal.{{ .nuon.install.id }}.nuon.run"
 default_instance_type = "{{ .nuon.inputs.inputs.instance_type }}"
+# If the sandbox module supports it, pass the maintenance role ARN here to get
+# automatic EKS RBAC access — avoids the bootstrap problem entirely:
+# maintenance_role_arn  = "{{ .nuon.install.iam_roles.maintenance.arn }}"
 
 # Optional: reference a tfvars file for additional vars
 [[var_file]]
@@ -232,6 +280,7 @@ branch    = "main"
 
 [vars]
 cluster_name         = "n-{{ .nuon.install.id }}"
+cluster_version      = "1.31"
 enable_nuon_dns      = "true"
 public_root_domain   = "{{ .nuon.inputs.inputs.root_domain }}"
 internal_root_domain = "internal.{{ .nuon.inputs.inputs.root_domain }}"
@@ -356,8 +405,19 @@ kubectl get pods -n <namespace> --no-headers
 ```
 
 **Trigger types:**
-- `type = "manual"` — on-demand (day-2 ops)
-- `type = "pre-deploy-component"` + `component_name = "<name>"` — runs before that component deploys (install-time)
+
+| Type | When it runs |
+|---|---|
+| `manual` | On-demand via dashboard or CLI |
+| `post-provision` | After sandbox is provisioned |
+| `pre-provision` | Before sandbox provisioning |
+| `post-deploy-all-components` | After all components deploy |
+| `pre-deploy-all-components` | Before all components deploy |
+| `post-deprovision` | After teardown |
+| `pre-deprovision` | Before teardown |
+| `post-update-inputs` | After inputs are updated |
+| `post-reprovision` | After sandbox reprovision |
+| `pre-deploy-component` | Before a specific component deploys — add `component_name = "<name>"` |
 
 Actions can have multiple `[[triggers]]` entries. Each action must have at least one `[[triggers]]` and one `[[steps]]` entry, plus a `timeout`.
 
