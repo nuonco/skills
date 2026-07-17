@@ -40,7 +40,7 @@ function authorizeReadInstall(customer /*, installId */) {
   }
 }
 
-// Only inputs the vendor marked `source: "customer"` are shown to and accepted
+// Only inputs you marked `source: "customer"` are shown to and accepted
 // from the customer. `vendor` inputs (the default) resolve from the app config
 // server-side and must never be settable by the browser.
 function customerFacingInputs(schema) {

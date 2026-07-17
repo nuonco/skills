@@ -49,8 +49,8 @@ the field list — it drifts from the app config.
 
 ### `source` is the primary customer/vendor split
 
-Every input has `source`: `"customer"` (the vendor chose to expose it to their
-customers) or `"vendor"` (the default — the vendor sets it, or it falls back to
+Every input has `source`: `"customer"` (you chose to expose it to your
+customers) or `"vendor"` (the default — you set it, or it falls back to
 the app-config default). **The customer-facing UI and the server whitelist must
 include only `source == "customer"` inputs.** Vendor inputs are never rendered to
 or accepted from the customer; they resolve from the app config server-side. Do

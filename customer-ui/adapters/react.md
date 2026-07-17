@@ -5,7 +5,7 @@ in `references/lifecycle.md`. Copyable snippets are in `assets/client/`.
 
 ## API layer
 
-See `assets/client/installsApi.js`. Typed calls to the vendor proxy (NOT
+See `assets/client/installsApi.js`. Typed calls to your proxy (NOT
 ctl-api):
 
 - `getInstallInputs()` → `GET /api/install-inputs`

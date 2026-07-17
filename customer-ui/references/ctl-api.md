@@ -7,8 +7,8 @@ language.
 
 Nuon is a BYOC platform: the control plane a customer integrates with is **not
 always** `api.nuon.co`. It may be a Nuon-managed multi-tenant gateway
-(`https://api.nuon.co`) or a dedicated/self-hosted BYOC control plane on the
-vendor's own domain. **Always confirm the target API URL with the user before
+(`https://api.nuon.co`) or a dedicated/self-hosted BYOC control plane on your
+own domain. **Always confirm the target API URL with the vendor before
 generating anything.**
 
 How to discover the current URL:
@@ -17,7 +17,7 @@ How to discover the current URL:
   CLI (and therefore your exploration commands) is currently pointed at.
 - It is also stored in `~/.nuon` as `api_url`.
 
-Confirm with the user that this is the control plane they want the integration
+Confirm with the vendor that this is the control plane they want the integration
 to target. If not, they must `nuon auth login` against the correct URL (or you
 must use the URL they specify) before proceeding.
 
@@ -30,8 +30,8 @@ Every request carries two headers:
 
 | Header           | Value                       | Source                    |
 | ---------------- | --------------------------- | ------------------------- |
-| `Authorization`  | `Bearer <NUON_API_TOKEN>`   | vendor server secret      |
-| `X-Nuon-Org-ID`  | `<NUON_ORG_ID>`             | vendor server config      |
+| `Authorization`  | `Bearer <NUON_API_TOKEN>`   | your server secret        |
+| `X-Nuon-Org-ID`  | `<NUON_ORG_ID>`             | your server config        |
 
 Also set `Content-Type: application/json` on requests with a body.
 

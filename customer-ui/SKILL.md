@@ -8,8 +8,8 @@ metadata:
 
 # Nuon BYOC Integration
 
-Build an integration that lets a vendor's customers create and manage Nuon
-installs from the vendor's own product, without ever exposing Nuon credentials
+Build an integration that lets your customers create and manage Nuon
+installs from your own product, without ever exposing Nuon credentials
 to the browser.
 
 ## The architecture (always)
@@ -23,9 +23,9 @@ to the browser.
 
 Three tiers, three properties that MUST hold:
 
-1. The Nuon API token and org ID live **only** on the vendor server. Never in
+1. The Nuon API token and org ID live **only** on your server. Never in
    the browser bundle, never returned to the client.
-2. The proxy **authorizes the customer** (vendor's own tenant model) before
+2. The proxy **authorizes the customer** (your own tenant model) before
    forwarding, and owns the sensitive fields (`app_id`, cloud account block).
 3. The customer supplies only a **whitelisted** subset of the ctl-api payload
    (`name` + declared inputs).
@@ -70,22 +70,22 @@ Otherwise generate from `references/` + observed conventions.
 The server authenticates to ctl-api with a long-lived token. It MUST be a
 **dedicated service-account token**, not a developer's personal token. Minting it
 requires admin credentials and the token must never pass through the skill, so
-**the skill does not create the token — it displays directions the user runs
+**the skill does not create the token — it displays directions the vendor runs
 themselves.** See `references/service-account-token.md`.
 
 1. **Confirm the control plane first (BYOC — not always `api.nuon.co`).** Run
    `nuon --help`; it prints `✅ You are logged into <api_url>.` (also in `~/.nuon`
-   as `api_url`). Show that URL to the user and confirm it is the control plane
+   as `api_url`). Show that URL to the vendor and confirm it is the control plane
    they want to integrate with. If not, have them `nuon auth login` against the
    correct one, or use the URL they specify. This URL becomes `NUON_API_URL` —
    never assume or hardcode it.
-2. **Display the service-account-token directions.** Show the user the two-step
+2. **Display the service-account-token directions.** Show the vendor the two-step
    admin-API flow with ready-to-paste curl commands (fill in the placeholders you
-   know — `ORG_ID`, and the admin API base if the user gave it):
+   know — `ORG_ID`, and the admin API base if the vendor gave it):
 
    ```bash
    # Set these first:
-   ADMIN_API_URL=...            # BYOC admin API base (ask the user; not the public API)
+   ADMIN_API_URL=...            # BYOC admin API base (ask the vendor; not the public API)
    ADMIN_EMAIL=...              # an admin account email you control
    ORG_ID=<org_id>
 
@@ -101,10 +101,10 @@ themselves.** See `references/service-account-token.md`.
    #   → { "api_token": "<token>" }  ← this is NUON_API_TOKEN
    ```
 
-   Tell the user this service account is granted **org-admin** (note the blast
+   Tell the vendor this service account is granted **org-admin** (note the blast
    radius). Do not run these commands for them and do not ask them to paste the
    token back to you.
-3. **Never bake the token into the repo.** The user places the `api_token` into
+3. **Never bake the token into the repo.** The vendor places the `api_token` into
    the project's secret mechanism as `NUON_API_TOKEN` themselves; keep `.env`
    gitignored. A personal `~/.nuon` token is acceptable ONLY for local
    verification, never for the committed/deployed integration — flag this
@@ -148,7 +148,7 @@ Per `references/contracts/install-create.md` and the relevant adapter:
 
 Per the frontend adapter:
 
-- A typed API layer calling the vendor proxy (not ctl-api directly).
+- A typed API layer calling your proxy (not ctl-api directly).
 - A create-install form whose fields are rendered dynamically from the input
   schema (types, required, defaults, sensitive→masked).
 - Create action with pending/disabled state, then success → navigate to a status

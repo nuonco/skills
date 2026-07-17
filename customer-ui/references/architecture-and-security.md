@@ -10,13 +10,13 @@ Customer's browser  ─▶  Vendor server (proxy)  ─▶  Nuon ctl-api
    (untrusted)            (holds secrets)            (control plane)
 ```
 
-- **Vendor UI** — operated by the vendor, used by their customers. Talks ONLY to
-  the vendor server. Knows nothing about Nuon credentials or the ctl-api URL.
-- **Vendor server** — operated by the vendor, hosted in their cloud account.
+- **Your UI** — operated by you, used by your customers. Talks ONLY to
+  your server. Knows nothing about Nuon credentials or the ctl-api URL.
+- **Your server** — operated by you, hosted in your cloud account.
   Holds the Nuon API token + org ID. Exposes a narrow `/api/...` surface and
   proxies to ctl-api.
-- **Nuon ctl-api** — operated by Nuon, hosted in the vendor's cloud account
-  (usually the same account as the vendor server).
+- **Nuon ctl-api** — operated by Nuon, hosted in your cloud account
+  (usually the same account as your server).
 
 ## Security invariants (the proxy MUST enforce all of these)
 
@@ -26,7 +26,7 @@ They are never sent to the client, never embedded in the bundle, never returned
 in a response body. The ctl-api base URL also stays server-side.
 
 ### 2. The customer is authorized before every forward
-The proxy maps the authenticated customer (the vendor's own session/tenant model)
+The proxy maps the authenticated customer (your own session/tenant model)
 to what they may do:
 - Which `app_id` / `org` they may target.
 - Which installs they may read or mutate (tenant ownership).
@@ -57,7 +57,7 @@ The UI must not present "created" as "ready" — it polls status (see
 
 ## Minimal proxy surface for "create an install"
 
-| Vendor endpoint            | Forwards to                                | Notes                              |
+| Your endpoint              | Forwards to                                | Notes                              |
 | -------------------------- | ------------------------------------------ | ---------------------------------- |
 | `GET  /api/install-inputs` | `GET /v1/apps/{app_id}/input-latest-config`| drives dynamic form; token hidden  |
 | `POST /api/installs`       | `POST /v1/apps/{app_id}/installs`          | authorize + whitelist + inject     |

@@ -1,6 +1,6 @@
 # Service-account token for the server (language-neutral)
 
-The vendor server authenticates to ctl-api with a long-lived bearer token
+Your server authenticates to ctl-api with a long-lived bearer token
 (`NUON_API_TOKEN`). Getting this credential right is a security decision, not a
 config detail.
 
@@ -16,17 +16,17 @@ config detail.
 
 ## How the token is issued — the admin API (two steps)
 
-A vendor operating a BYOC control plane has access to its **admin API** and mints
-a durable token in two calls: create a service account, then create a static
-token for it. **The skill does not run these for the user** — it displays the
-directions and ready-to-paste curl commands, and the user runs them (they hold
-the admin credentials and the token must not pass through the skill).
+As a vendor operating a BYOC control plane, you have access to its **admin API**
+and mint a durable token in two calls: create a service account, then create a
+static token for it. **The skill does not run these for the vendor** — it displays
+the directions and ready-to-paste curl commands, and the vendor runs them (they
+hold the admin credentials and the token must not pass through the skill).
 
 Both endpoints live on the **admin API**, not the public API:
 
 - `admin_api_url` is the control plane's admin API base — separate from the
   public API and network-restricted. Per-deployment (BYOC); confirm with the
-  user, do not assume.
+  vendor, do not assume.
 - In-request auth is the `X-Nuon-Admin-Email` header naming an existing admin
   account; the real gate is network access to the admin API.
 
@@ -36,7 +36,7 @@ Both endpoints live on the **admin API**, not the public API:
 idempotent — returns the existing account if already created. The account's email
 is `{org_id}-admin-service-account@serviceaccount.nuon.co`, and it is granted the
 **org-admin** role for that org (this endpoint does not offer finer scoping; note
-the blast radius to the user).
+the blast radius to the vendor).
 
 ```bash
 curl -sS -X POST "$ADMIN_API_URL/v1/orgs/$ORG_ID/admin-service-account" \
@@ -60,9 +60,9 @@ curl -sS -X POST "$ADMIN_API_URL/v1/general/admin-static-token" \
 # → { "api_token": "<token>" }
 ```
 
-The returned `api_token` is a long-lived `TokenTypeStatic` token. The user puts it
-into the server's secret store as `NUON_API_TOKEN` (see Storage below). If the
-vendor prefers, the dashboard equivalent (Org settings → API tokens) also works.
+The returned `api_token` is a long-lived `TokenTypeStatic` token. You put it
+into your server's secret store as `NUON_API_TOKEN` (see Storage below). If you
+prefer, the dashboard equivalent (Org settings → API tokens) also works.
 
 ## Storage
 

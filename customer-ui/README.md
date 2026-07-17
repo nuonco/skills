@@ -1,8 +1,8 @@
 # customer-ui (experimental agent skill)
 
-An agent skill that integrates a vendor application with the Nuon BYOC
-`ctl-api`, so the vendor's customers can create and manage Nuon installs from the
-vendor-owned UI — without exposing Nuon credentials to the browser.
+An agent skill that integrates your application with the Nuon BYOC
+`ctl-api`, so your customers can create and manage Nuon installs from your
+own UI — without exposing Nuon credentials to the browser.
 
 It generates a **server-side proxy** (any language/framework) that holds the Nuon
 API token and forwards to `ctl-api`, plus **frontend components** that call the
