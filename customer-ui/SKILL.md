@@ -1,6 +1,6 @@
 ---
 name: customer-ui
-description: Integrate a vendor application with a Nuon BYOC control plane so the vendor's own customers can create and manage Nuon installs from the vendor-owned UI. Adds a server-side proxy (any language/framework) that holds the Nuon API token and forwards requests to the ctl-api, then wires up frontend components that call the new proxy endpoints. Use when the user wants their app or customers to create installs, drive installs, or otherwise talk to a Nuon BYOC control plane from their own product. Triggers on "integrate my app with Nuon", "let customers create installs from my UI", "proxy the ctl-api", "add a create install button".
+description: Integrate your application with a Nuon BYOC control plane so your customers can create and manage Nuon installs directly from your own UI. Adds a server-side proxy (any language/framework) that holds your Nuon API token and forwards requests to the ctl-api, then wires up frontend components that call the new proxy endpoints. Use when you want your app or your customers to create installs, drive installs, or otherwise talk to a Nuon BYOC control plane from your product. Triggers on "integrate my app with Nuon", "let my customers create installs from my UI", "proxy the ctl-api", "add a create install button".
 license: Apache-2.0
 metadata:
   author: nuonco
