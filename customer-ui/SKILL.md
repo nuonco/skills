@@ -48,9 +48,60 @@ explicit `TODO` comments.
 
 Follow these steps in order. Track them with tasks if the integration is large.
 
-### 1. Detect the stack (do not assume)
+Everything that talks to Nuon goes through the **`nuon` CLI**, not raw curl.
+Drive it with `--output agent` for a stable `{ok,data,error}` JSON envelope, and
+`--read-only` for any read you don't intend to be a write.
 
-Inspect the repo to determine:
+### 1. Check the `nuon` CLI is installed
+
+Confirm `nuon` is on PATH (`nuon version`). If it is not, stop and tell the
+vendor to install it (`brew install nuonco/tap/nuon`, or see
+https://docs.nuon.co) — the whole flow depends on it. Do not fall back to curl.
+
+### 2. Check authentication; log in if needed
+
+Check whether the vendor is authenticated — e.g. `nuon orgs list --output agent`
+(an `unauthorized` error code, or a "session has expired" banner, means not
+logged in). If not authenticated, have them run **`nuon auth login`** (interactive
+browser flow — the vendor completes it; you cannot). Whichever control plane the
+CLI is logged into is the one this integration targets (BYOC — it is not always
+`api.nuon.co`); its `api_url` in `~/.nuon` becomes `NUON_API_URL`.
+
+### 3. Confirm the org and app
+
+- **Org:** show the current org (`nuon orgs get`) and confirm it with the vendor;
+  if wrong, `nuon orgs list` then `nuon orgs select`. Capture the org id
+  (`nuon orgs id`) as `NUON_ORG_ID`.
+- **App:** `nuon apps list`, confirm the target app with the vendor, and
+  `nuon apps select` (or capture its id) as `NUON_APP_ID`. Note its
+  **cloud platform** (aws / azure / gcp) — it determines the account block in the
+  create payload.
+
+### 4. Create a service account and token
+
+Create a dedicated **service account** for the server and mint its token via the
+CLI. Use the **`org_admin`** role (creating installs requires write access;
+`nuon roles list` shows the alternatives, but `org_admin` is what this integration
+needs). See `references/service-account-token.md`.
+
+```bash
+# 1) Create the service account (org_admin):
+nuon service-accounts create --name customer-ui-proxy --role org_admin --output agent
+#   → data.id
+
+# 2) Mint a long-lived token (duration defaults to 8760h = 1 year):
+nuon service-accounts tokens create --id <account_id> --duration 8760h --output agent
+#   → data.token
+```
+
+Write the returned token into the project's secret mechanism as `NUON_API_TOKEN`
+(keep `.env` gitignored) — **do not print it** or commit it. Tell the vendor the
+service account is **org-admin** (note the blast radius). Rotate later with
+`nuon service-accounts tokens create --id <id> --invalidate`.
+
+### 5. Inspect the vendor's app and detect the stack
+
+Now understand the app you are integrating into. Inspect the repo to determine:
 
 - **Language**: `package.json` (Node), `go.mod` (Go), `pyproject.toml` /
   `requirements.txt` (Python), `Gemfile` (Ruby), `pom.xml` / `build.gradle`
@@ -60,88 +111,21 @@ Inspect the repo to determine:
 - **Frontend framework**: React/Vue/Svelte/Angular, or none.
 - **Conventions**: how routes are declared, how config/secrets are read, what
   validation library exists, what HTTP client the frontend already uses, TS vs
-  JS.
+  JS. Also decide where the customer→app authorization hooks into the app's
+  existing auth/session model.
 
 If an `adapters/<lang>-<framework>.md` exists for the detected stack, load it.
 Otherwise generate from `references/` + observed conventions.
 
-### 2. Provision a service-account token for the server
-
-The server authenticates to ctl-api with a long-lived token. It MUST be a
-**dedicated service-account token**, not a developer's personal token. The token
-must never pass through the skill, so **the skill does not create the token — it
-lists the roles, displays the directions, and the vendor runs them themselves.**
-Service accounts are managed on the **public API** (same base URL + auth as the
-proxy); the vendor bootstraps with their own org-admin token once. See
-`references/service-account-token.md`.
-
-1. **Confirm the control plane first (BYOC — not always `api.nuon.co`).** Run
-   `nuon --help`; it prints `✅ You are logged into <api_url>.` (also in `~/.nuon`
-   as `api_url`). Show that URL to the vendor and confirm it is the control plane
-   they want to integrate with. If not, have them `nuon auth login` against the
-   correct one, or use the URL they specify. This URL becomes `NUON_API_URL` —
-   never assume or hardcode it.
-2. **List the roles and let the vendor choose.** Fetch `GET /v1/roles` and show
-   the assignable service-account roles with their descriptions. Explain that
-   **creating installs requires write access** — today only `org_admin` works
-   (`org_read_only` cannot create; `runner` is for runners). Have the vendor pick;
-   note the blast radius of their choice.
-
-   ```bash
-   curl -sS "$NUON_API_URL/v1/roles" \
-     -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG"
-   ```
-
-3. **Display the service-account + token directions.** Show ready-to-paste curl
-   commands, filling in the placeholders you know (`NUON_API_URL`, `ORG`, chosen
-   `role`). `TOKEN` is the vendor's own org-admin token (dashboard or
-   `nuon orgs api-token`), used only for these setup calls.
-
-   ```bash
-   # 1) Create the service account with the chosen role:
-   curl -sS -X POST "$NUON_API_URL/v1/service-accounts" \
-     -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
-     -H "Content-Type: application/json" \
-     -d '{"name":"customer-ui-proxy","role":"org_admin"}'
-   #   → { "id": "acc_...", ... }
-
-   # 2) Mint a long-lived token for it (duration defaults to 8760h = 1 year):
-   curl -sS -X POST "$NUON_API_URL/v1/service-accounts/<account_id>/tokens" \
-     -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
-     -H "Content-Type: application/json" -d '{"duration":"8760h"}'
-   #   → { "token": "<token>" }  ← this is NUON_API_TOKEN
-   ```
-
-   Do not run these commands for the vendor and do not ask them to paste the
-   token back to you. (The `nuon` CLI has no `service-accounts` command yet — use
-   curl; prefer the CLI if a future version adds one.)
-4. **Never bake the token into the repo.** The vendor places the returned `token`
-   into the project's secret mechanism as `NUON_API_TOKEN` themselves; keep `.env`
-   gitignored. A personal `~/.nuon` token is acceptable ONLY for local
-   verification, never for the committed/deployed integration — flag this
-   explicitly.
-
-### 3. Confirm what else can't be inferred
-
-Ask ONLY for what the repo doesn't reveal:
-
-- The target Nuon `app_id` and `org_id`. `org_id` / `app_id` are also in
-  `~/.nuon` / discoverable via `nuon apps list`.
-- The app's **cloud platform** (aws / azure / gcp) — determines the account
-  block in the create payload.
-- Where the customer's tenant→app authorization should hook into their existing
-  auth/session model.
-
-Do not ask for anything already discoverable in the repo or via the app schema.
-
-### 4. Fetch the install-input schema
+### 6. Fetch the install-input schema
 
 Install form fields are rendered **dynamically from the app's input schema**, not
 hardcoded. Retrieve the schema (see `references/contracts/install-inputs-schema.md`)
-via the `nuon` CLI / MCP, or plan the proxy's schema endpoint to fetch it live.
-Use it to drive both the generated form and the server-side input whitelist.
+with `nuon apps input-config --output agent`, or plan the proxy's schema endpoint
+to fetch it live. Use it to drive both the generated form and the server-side
+input whitelist.
 
-### 5. Generate the server proxy
+### 7. Generate the server proxy
 
 Per `references/contracts/install-create.md` and the relevant adapter:
 
@@ -155,7 +139,7 @@ Per `references/contracts/install-create.md` and the relevant adapter:
 - A tenant-authorization step, clearly marked where the human must enforce their
   own tenant→app mapping. Never generate a pass-through-everything proxy.
 
-### 6. Generate the frontend
+### 8. Generate the frontend
 
 Per the frontend adapter:
 
@@ -166,12 +150,12 @@ Per the frontend adapter:
   view that polls `GET /api/installs/:id` (creation is async).
 - Error surfacing from the mapped proxy errors.
 
-### 7. Verify
+### 9. Verify
 
 Build/typecheck the project. Optionally dry-run the proxy against Nuon using the
 `nuon` CLI `--read-only` guardrail or a test org before wiring the write path.
 
-### 8. Report
+### 10. Report
 
 List generated files, the security TODOs the human must complete (tenant auth,
 secret storage), and how to extend to more operations (deploy, teardown) by

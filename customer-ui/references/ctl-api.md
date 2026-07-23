@@ -54,13 +54,13 @@ consistent shape for the rest of your code. Map upstream status codes:
 Never forward the raw ctl-api error body to the customer — it can reveal org
 internals. Log it server-side, return a mapped, sanitized message.
 
-## Endpoints used by this integration
+## Endpoints the generated proxy uses
+
+These are the HTTP calls the vendor's **server proxy** makes at runtime (with the
+service-account `NUON_API_TOKEN` + `X-Nuon-Org-ID`):
 
 | Purpose                  | Method + path                                   |
 | ------------------------ | ----------------------------------------------- |
-| List assignable roles    | `GET  /v1/roles` (see `service-account-token.md`) |
-| Create service account   | `POST /v1/service-accounts` — `{name, role}` (org-admin caller) |
-| Mint service-acct token  | `POST /v1/service-accounts/{account_id}/tokens` — `{duration, invalidate}` → `{token}` |
 | App input schema (latest)| `GET  /v1/apps/{app_id}/input-latest-config`    |
 | Create install           | `POST /v1/apps/{app_id}/installs`               |
 | Get install (status)     | `GET  /v1/installs/{install_id}`                |
@@ -70,6 +70,10 @@ internals. Log it server-side, return a mapped, sanitized message.
 
 Payload/response shapes for the create + input-schema flows are in
 `contracts/install-create.md` and `contracts/install-inputs-schema.md`.
+
+Setup tasks (auth, org/app selection, creating the service account + token) are
+done during the skill's flow via the **`nuon` CLI**, not by the proxy — see
+`service-account-token.md`.
 
 ## Verifying against a real org
 

@@ -14,72 +14,37 @@ config detail.
   `nuon auth login`). That token is fine ONLY for local, throwaway verification
   while building the integration — never for the committed or deployed server.
 
-## How the token is issued — the public API (three steps)
+## How the token is issued — the `nuon` CLI (two steps)
 
-Service accounts and their tokens are managed on the **public API** — the same
-base URL (`NUON_API_URL`) and auth (`Authorization: Bearer` + `X-Nuon-Org-ID`)
-the proxy itself uses. No admin API, no `X-Nuon-Admin-Email`, no separate base
-URL. The caller must be an **org admin**.
+Service accounts and their tokens are managed with the **`nuon` CLI**, against
+whichever control plane the CLI is logged into (see SKILL steps 1–2). The
+logged-in account must be an **org admin**. Drive the CLI with `--output agent`
+to get a `{ok,data,error}` envelope you can parse. Do not use raw curl.
 
-**Bootstrap:** you mint the durable service-account token *once* using your own
-org-admin API token (get it from the Nuon dashboard, or `nuon orgs api-token`).
-That personal token is used only for these setup calls — it is never what the
-server ships with.
+### Step 1 — create the service account (`org_admin`)
 
-**The skill does not run these for the vendor** — it displays the directions and
-ready-to-paste curl commands, lists the roles, and lets the vendor pick. The
-token must not pass through the skill; the vendor runs the calls and stores the
-result themselves.
-
-Assume these are set: `NUON_API_URL`, `ORG` (org id), and `TOKEN` (your personal
-org-admin token, for setup only).
-
-### Step 1 — list assignable roles and choose one
-
-`GET /v1/roles` returns the roles that can be assigned to a service account.
+Creating installs requires write access, so use the **`org_admin`** role.
+`nuon roles list` shows the assignable roles (`org_admin`, `org_read_only`,
+`runner`), but `org_admin` is what this integration needs.
 
 ```bash
-curl -sS "$NUON_API_URL/v1/roles" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG"
-# → [ { "role_type": "org_admin",     "title": "Admin",     "applies_to": ["user","service_account"] },
-#     { "role_type": "org_read_only", "title": "Read-only", "applies_to": ["user","service_account"] },
-#     { "role_type": "runner",        "title": "Runner",    "applies_to": ["service_account"] } ]
+nuon service-accounts create --name customer-ui-proxy --role org_admin --output agent
+# → {"ok":true,"data":{"id":"acc_...","name":"customer-ui-proxy",...}}
 ```
 
-Have the vendor choose. **Creating installs requires write access**, so today
-`org_admin` is the role that works for this integration — `org_read_only` cannot
-create, and `runner` is for runners. Note the blast radius of whatever is chosen,
-and re-check `GET /v1/roles` over time as finer-grained roles are added.
+### Step 2 — mint a token for the service account
 
-### Step 2 — create the service account
-
-`POST /v1/service-accounts` with a `name` and the chosen `role`. Returns the
-account object (including its `id`).
+`duration` is optional (defaults to `8760h` = 1 year). Pass `--invalidate` to
+revoke prior tokens when rotating.
 
 ```bash
-curl -sS -X POST "$NUON_API_URL/v1/service-accounts" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"customer-ui-proxy","role":"org_admin"}'
-# → { "id": "acc_...", "name": "customer-ui-proxy", ... }
+nuon service-accounts tokens create --id <account_id> --duration 8760h --output agent
+# → {"ok":true,"data":{"token":"<token>"}}
 ```
 
-### Step 3 — mint a token for the service account
-
-`POST /v1/service-accounts/{account_id}/tokens`. `duration` is optional
-(defaults to `8760h` = 1 year). Pass `"invalidate": true` to revoke prior tokens
-when rotating.
-
-```bash
-curl -sS -X POST "$NUON_API_URL/v1/service-accounts/<account_id>/tokens" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
-  -H "Content-Type: application/json" \
-  -d '{"duration":"8760h"}'
-# → { "token": "<token>" }
-```
-
-The returned `token` is what the server uses as `NUON_API_TOKEN` (see Storage
-below). The dashboard equivalent (Org settings → Service accounts) also works.
+Take `data.token` and write it to the server's secret store as `NUON_API_TOKEN`
+(see Storage below) — **never print or commit it**. Tell the vendor the service
+account is granted **org-admin** (note the blast radius).
 
 ## Storage
 
@@ -89,5 +54,5 @@ below). The dashboard equivalent (Org settings → Service accounts) also works.
   (see `architecture-and-security.md`).
 - Plan for rotation: the token can expire or be revoked; the server should fail
   clearly (surface a mapped 502) rather than silently. Rotate by minting a new
-  token (`POST /v1/service-accounts/{id}/tokens`, optionally `"invalidate": true`
-  to revoke the old one) and updating the secret.
+  token (`nuon service-accounts tokens create --id <id> [--invalidate]`) and
+  updating the secret.
