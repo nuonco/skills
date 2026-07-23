@@ -58,7 +58,9 @@ internals. Log it server-side, return a mapped, sanitized message.
 
 | Purpose                  | Method + path                                   |
 | ------------------------ | ----------------------------------------------- |
-| Mint service-acct token  | `POST {admin_api_url}/v1/general/admin-static-token` (admin API; see `service-account-token.md`) |
+| List assignable roles    | `GET  /v1/roles` (see `service-account-token.md`) |
+| Create service account   | `POST /v1/service-accounts` — `{name, role}` (org-admin caller) |
+| Mint service-acct token  | `POST /v1/service-accounts/{account_id}/tokens` — `{duration, invalidate}` → `{token}` |
 | App input schema (latest)| `GET  /v1/apps/{app_id}/input-latest-config`    |
 | Create install           | `POST /v1/apps/{app_id}/installs`               |
 | Get install (status)     | `GET  /v1/installs/{install_id}`                |

@@ -68,10 +68,12 @@ Otherwise generate from `references/` + observed conventions.
 ### 2. Provision a service-account token for the server
 
 The server authenticates to ctl-api with a long-lived token. It MUST be a
-**dedicated service-account token**, not a developer's personal token. Minting it
-requires admin credentials and the token must never pass through the skill, so
-**the skill does not create the token — it displays directions the vendor runs
-themselves.** See `references/service-account-token.md`.
+**dedicated service-account token**, not a developer's personal token. The token
+must never pass through the skill, so **the skill does not create the token — it
+lists the roles, displays the directions, and the vendor runs them themselves.**
+Service accounts are managed on the **public API** (same base URL + auth as the
+proxy); the vendor bootstraps with their own org-admin token once. See
+`references/service-account-token.md`.
 
 1. **Confirm the control plane first (BYOC — not always `api.nuon.co`).** Run
    `nuon --help`; it prints `✅ You are logged into <api_url>.` (also in `~/.nuon`
@@ -79,33 +81,42 @@ themselves.** See `references/service-account-token.md`.
    they want to integrate with. If not, have them `nuon auth login` against the
    correct one, or use the URL they specify. This URL becomes `NUON_API_URL` —
    never assume or hardcode it.
-2. **Display the service-account-token directions.** Show the vendor the two-step
-   admin-API flow with ready-to-paste curl commands (fill in the placeholders you
-   know — `ORG_ID`, and the admin API base if the vendor gave it):
+2. **List the roles and let the vendor choose.** Fetch `GET /v1/roles` and show
+   the assignable service-account roles with their descriptions. Explain that
+   **creating installs requires write access** — today only `org_admin` works
+   (`org_read_only` cannot create; `runner` is for runners). Have the vendor pick;
+   note the blast radius of their choice.
 
    ```bash
-   # Set these first:
-   ADMIN_API_URL=...            # BYOC admin API base (ask the vendor; not the public API)
-   ADMIN_EMAIL=...              # an admin account email you control
-   ORG_ID=<org_id>
-
-   # 1) Create (or fetch) the org service account — idempotent, empty body:
-   curl -sS -X POST "$ADMIN_API_URL/v1/orgs/$ORG_ID/admin-service-account" \
-     -H "X-Nuon-Admin-Email: $ADMIN_EMAIL" -H "Content-Type: application/json" -d '{}'
-   #   → note the returned "email" / "subject"
-
-   # 2) Mint a long-lived static token for that service account:
-   curl -sS -X POST "$ADMIN_API_URL/v1/general/admin-static-token" \
-     -H "X-Nuon-Admin-Email: $ADMIN_EMAIL" -H "Content-Type: application/json" \
-     -d '{"email_or_subject":"'"$ORG_ID"'-admin-service-account@serviceaccount.nuon.co","duration":"8760h"}'
-   #   → { "api_token": "<token>" }  ← this is NUON_API_TOKEN
+   curl -sS "$NUON_API_URL/v1/roles" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG"
    ```
 
-   Tell the vendor this service account is granted **org-admin** (note the blast
-   radius). Do not run these commands for them and do not ask them to paste the
-   token back to you.
-3. **Never bake the token into the repo.** The vendor places the `api_token` into
-   the project's secret mechanism as `NUON_API_TOKEN` themselves; keep `.env`
+3. **Display the service-account + token directions.** Show ready-to-paste curl
+   commands, filling in the placeholders you know (`NUON_API_URL`, `ORG`, chosen
+   `role`). `TOKEN` is the vendor's own org-admin token (dashboard or
+   `nuon orgs api-token`), used only for these setup calls.
+
+   ```bash
+   # 1) Create the service account with the chosen role:
+   curl -sS -X POST "$NUON_API_URL/v1/service-accounts" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"customer-ui-proxy","role":"org_admin"}'
+   #   → { "id": "acc_...", ... }
+
+   # 2) Mint a long-lived token for it (duration defaults to 8760h = 1 year):
+   curl -sS -X POST "$NUON_API_URL/v1/service-accounts/<account_id>/tokens" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
+     -H "Content-Type: application/json" -d '{"duration":"8760h"}'
+   #   → { "token": "<token>" }  ← this is NUON_API_TOKEN
+   ```
+
+   Do not run these commands for the vendor and do not ask them to paste the
+   token back to you. (The `nuon` CLI has no `service-accounts` command yet — use
+   curl; prefer the CLI if a future version adds one.)
+4. **Never bake the token into the repo.** The vendor places the returned `token`
+   into the project's secret mechanism as `NUON_API_TOKEN` themselves; keep `.env`
    gitignored. A personal `~/.nuon` token is acceptable ONLY for local
    verification, never for the committed/deployed integration — flag this
    explicitly.

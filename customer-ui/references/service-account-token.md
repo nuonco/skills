@@ -14,55 +14,72 @@ config detail.
   `nuon auth login`). That token is fine ONLY for local, throwaway verification
   while building the integration — never for the committed or deployed server.
 
-## How the token is issued — the admin API (two steps)
+## How the token is issued — the public API (three steps)
 
-As a vendor operating a BYOC control plane, you have access to its **admin API**
-and mint a durable token in two calls: create a service account, then create a
-static token for it. **The skill does not run these for the vendor** — it displays
-the directions and ready-to-paste curl commands, and the vendor runs them (they
-hold the admin credentials and the token must not pass through the skill).
+Service accounts and their tokens are managed on the **public API** — the same
+base URL (`NUON_API_URL`) and auth (`Authorization: Bearer` + `X-Nuon-Org-ID`)
+the proxy itself uses. No admin API, no `X-Nuon-Admin-Email`, no separate base
+URL. The caller must be an **org admin**.
 
-Both endpoints live on the **admin API**, not the public API:
+**Bootstrap:** you mint the durable service-account token *once* using your own
+org-admin API token (get it from the Nuon dashboard, or `nuon orgs api-token`).
+That personal token is used only for these setup calls — it is never what the
+server ships with.
 
-- `admin_api_url` is the control plane's admin API base — separate from the
-  public API and network-restricted. Per-deployment (BYOC); confirm with the
-  vendor, do not assume.
-- In-request auth is the `X-Nuon-Admin-Email` header naming an existing admin
-  account; the real gate is network access to the admin API.
+**The skill does not run these for the vendor** — it displays the directions and
+ready-to-paste curl commands, lists the roles, and lets the vendor pick. The
+token must not pass through the skill; the vendor runs the calls and stores the
+result themselves.
 
-### Step 1 — create (or fetch) the service account
+Assume these are set: `NUON_API_URL`, `ORG` (org id), and `TOKEN` (your personal
+org-admin token, for setup only).
 
-`POST {admin_api_url}/v1/orgs/{org_id}/admin-service-account` (empty body). It is
-idempotent — returns the existing account if already created. The account's email
-is `{org_id}-admin-service-account@serviceaccount.nuon.co`, and it is granted the
-**org-admin** role for that org (this endpoint does not offer finer scoping; note
-the blast radius to the vendor).
+### Step 1 — list assignable roles and choose one
 
-```bash
-curl -sS -X POST "$ADMIN_API_URL/v1/orgs/$ORG_ID/admin-service-account" \
-  -H "X-Nuon-Admin-Email: $ADMIN_EMAIL" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-# → { "id": "...", "email": "<org_id>-admin-service-account@serviceaccount.nuon.co",
-#     "subject": "<org_id>-admin-service-account", ... }
-```
-
-### Step 2 — mint a static token for that account
-
-`POST {admin_api_url}/v1/general/admin-static-token` with the service account's
-email (or subject) from step 1. `duration` is optional (defaults to 1 year).
+`GET /v1/roles` returns the roles that can be assigned to a service account.
 
 ```bash
-curl -sS -X POST "$ADMIN_API_URL/v1/general/admin-static-token" \
-  -H "X-Nuon-Admin-Email: $ADMIN_EMAIL" \
-  -H "Content-Type: application/json" \
-  -d '{"email_or_subject":"'"$ORG_ID"'-admin-service-account@serviceaccount.nuon.co","duration":"8760h"}'
-# → { "api_token": "<token>" }
+curl -sS "$NUON_API_URL/v1/roles" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG"
+# → [ { "role_type": "org_admin",     "title": "Admin",     "applies_to": ["user","service_account"] },
+#     { "role_type": "org_read_only", "title": "Read-only", "applies_to": ["user","service_account"] },
+#     { "role_type": "runner",        "title": "Runner",    "applies_to": ["service_account"] } ]
 ```
 
-The returned `api_token` is a long-lived `TokenTypeStatic` token. You put it
-into your server's secret store as `NUON_API_TOKEN` (see Storage below). If you
-prefer, the dashboard equivalent (Org settings → API tokens) also works.
+Have the vendor choose. **Creating installs requires write access**, so today
+`org_admin` is the role that works for this integration — `org_read_only` cannot
+create, and `runner` is for runners. Note the blast radius of whatever is chosen,
+and re-check `GET /v1/roles` over time as finer-grained roles are added.
+
+### Step 2 — create the service account
+
+`POST /v1/service-accounts` with a `name` and the chosen `role`. Returns the
+account object (including its `id`).
+
+```bash
+curl -sS -X POST "$NUON_API_URL/v1/service-accounts" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"customer-ui-proxy","role":"org_admin"}'
+# → { "id": "acc_...", "name": "customer-ui-proxy", ... }
+```
+
+### Step 3 — mint a token for the service account
+
+`POST /v1/service-accounts/{account_id}/tokens`. `duration` is optional
+(defaults to `8760h` = 1 year). Pass `"invalidate": true` to revoke prior tokens
+when rotating.
+
+```bash
+curl -sS -X POST "$NUON_API_URL/v1/service-accounts/<account_id>/tokens" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Nuon-Org-ID: $ORG" \
+  -H "Content-Type: application/json" \
+  -d '{"duration":"8760h"}'
+# → { "token": "<token>" }
+```
+
+The returned `token` is what the server uses as `NUON_API_TOKEN` (see Storage
+below). The dashboard equivalent (Org settings → Service accounts) also works.
 
 ## Storage
 
@@ -71,4 +88,6 @@ prefer, the dashboard equivalent (Org settings → API tokens) also works.
 - The token is read server-side only and never returned to the browser
   (see `architecture-and-security.md`).
 - Plan for rotation: the token can expire or be revoked; the server should fail
-  clearly (surface a mapped 502) rather than silently.
+  clearly (surface a mapped 502) rather than silently. Rotate by minting a new
+  token (`POST /v1/service-accounts/{id}/tokens`, optionally `"invalidate": true`
+  to revoke the old one) and updating the secret.
