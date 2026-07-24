@@ -15,6 +15,7 @@ npx skills add nuonco/skills/nuon-creator
 npx skills add nuonco/skills/nuon-app-config
 npx skills add nuonco/skills/nuon-actions
 npx skills add nuonco/skills/nuon-policy
+npx skills add nuonco/skills/customer-ui
 ```
 
 ---
@@ -56,6 +57,16 @@ Defines compliance and security policies using OPA Rego. Validates container ima
 **Covers:** image signing requirements, Terraform resource encryption, Helm resource limits, component-scoped or app-wide policy enforcement
 
 > "require signed images" / "enforce encryption on my Terraform resources" / "add resource limits to my Helm chart"
+
+---
+
+### `customer-ui` — App Integration Builder
+
+Integrates a vendor's own application with a Nuon BYOC control plane so their customers can create and manage installs from the vendor-owned UI. Generates a server-side proxy (any language/framework) that holds the Nuon token and forwards to the ctl-api, then wires up frontend components that call it.
+
+**Covers:** service-account token provisioning, credential-safe proxy endpoints, dynamic install-input forms (customer-facing inputs only), async install status, tenant authorization boundaries
+
+> "integrate my app with Nuon" / "let customers create installs from my UI" / "proxy the ctl-api"
 
 ---
 
